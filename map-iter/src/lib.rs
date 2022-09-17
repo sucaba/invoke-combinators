@@ -36,22 +36,32 @@ impl<'a> Invoke<(&'a str,)> for ToStringMapper {
 
 pub struct InvokeFn<F>(F);
 
-impl<F> InvokeOnce<Args> for InvokeFn<F> {
-    type Output = R;
+impl<F, Arg, R> InvokeOnce<(Arg,)> for InvokeFn<F>
+where
+    F: FnOnce(Arg) -> R,
+{
+    type Output = F::Output;
 
-    fn invoke_once(self, args: Args) -> Self::Output {
-        self.0(args)
-    }
-}
-impl<Args, R> InvokeMut<Args> for InvokeFn<Args, R> {
-    fn invoke_mut(&mut self, args: Args) -> Self::Output {
-        self.0(args)
+    fn invoke_once(self, args: (Arg,)) -> Self::Output {
+        (self.0)(args.0)
     }
 }
 
-impl<Args, R> Invoke<Args> for InvokeFn<Args, R> {
-    fn invoke(&self, args: Args) -> Self::Output {
-        self.0(args)
+impl<F, Arg, R> InvokeMut<(Arg,)> for InvokeFn<F>
+where
+    F: FnMut(Arg) -> R,
+{
+    fn invoke_mut(&mut self, args: (Arg,)) -> F::Output {
+        self.0(args.0)
+    }
+}
+
+impl<F, Arg, R> Invoke<(Arg,)> for InvokeFn<F>
+where
+    F: Fn(Arg) -> R,
+{
+    fn invoke(&self, args: (Arg,)) -> F::Output {
+        self.0(args.0)
     }
 }
 
@@ -144,21 +154,23 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(outer) = self.outer.as_mut() {
-            outer.next()
-        } else {
-            loop {
-                if let Some(inner) = self.inner.next() {
-                    let mut outer = self.f.invoke((inner,)).into_iter();
-                    let result = outer.next();
-                    if result.is_none() {
-                        continue;
-                    }
-                    self.outer = Some(outer);
-                    break result;
-                } else {
-                    self.outer = None;
-                    break None;
+            let result = outer.next();
+            if result.is_some() {
+                return result;
+            }
+        }
+        loop {
+            if let Some(inner) = self.inner.next() {
+                let mut outer = self.f.invoke((inner,)).into_iter();
+                let result = outer.next();
+                if result.is_none() {
+                    continue;
                 }
+                self.outer = Some(outer);
+                break result;
+            } else {
+                self.outer = None;
+                break None;
             }
         }
     }
@@ -180,15 +192,19 @@ mod tests {
     }
 
     #[test]
-    fn flat_map_iter_should_be_iterable() {
-        let src = ["red", "green", "blue"];
+    fn test() {
         let maplen = InvokeFn(str::len);
         let len = maplen.invoke(("foobar",));
-        /*
-        let iter = FlatMapIter::new(src.iter(), maplen);
+        assert_eq!(6, len);
+    }
 
-        let expected = src.map(str::len);
-        assert_eq!(expected, iter.collect::<Vec<_>>());
-        */
+    #[test]
+    fn flat_map_iter_should_be_iterable() {
+        let src = ["red", "green", "blue"];
+        let iter = FlatMapIter::new(src.iter(), RefArg(InvokeFn(str::chars)));
+
+        let expected = String::from("redgreenblue");
+        let v = iter.collect::<String>();
+        assert_eq!(expected, v);
     }
 }
