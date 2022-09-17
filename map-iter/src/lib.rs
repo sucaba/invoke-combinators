@@ -34,6 +34,27 @@ impl<'a> Invoke<(&'a str,)> for ToStringMapper {
     }
 }
 
+pub struct InvokeFn<F>(F);
+
+impl<F> InvokeOnce<Args> for InvokeFn<F> {
+    type Output = R;
+
+    fn invoke_once(self, args: Args) -> Self::Output {
+        self.0(args)
+    }
+}
+impl<Args, R> InvokeMut<Args> for InvokeFn<Args, R> {
+    fn invoke_mut(&mut self, args: Args) -> Self::Output {
+        self.0(args)
+    }
+}
+
+impl<Args, R> Invoke<Args> for InvokeFn<Args, R> {
+    fn invoke(&self, args: Args) -> Self::Output {
+        self.0(args)
+    }
+}
+
 pub struct RefArg<T>(T);
 
 impl<'a, A: 'a + ?Sized, T, R> InvokeOnce<(&&'a A,)> for RefArg<T>
@@ -96,33 +117,50 @@ where
     F::Output: IntoIterator,
 {
     inner: I,
-    outer_iter: <F::Output as IntoIterator>::Item,
-    flat_map: F,
+    outer: Option<<F::Output as IntoIterator>::IntoIter>,
+    f: F,
 }
 
 impl<I: Iterator, F: Invoke<(I::Item,)>> FlatMapIter<I, F>
 where
     F::Output: IntoIterator,
 {
-    pub fn new(inner: I, flat_map: F) -> Self {
+    pub fn new(inner: I, f: F) -> Self {
         Self {
             inner,
-            outer_iter,
-            flat_map,
+            f,
+            outer: None,
         }
     }
 }
 
-impl<I, F, B> Iterator for FlatMapIter<I, F>
+impl<I, F: Invoke<(I::Item,)>> Iterator for FlatMapIter<I, F>
 where
     I: Iterator,
-    B: IntoIterator,
-    F: InvokeMut<(I::Item,), Output = B>,
+    F::Output: IntoIterator,
+    F: InvokeMut<(I::Item,)>,
 {
-    type Item = B;
+    type Item = <F::Output as IntoIterator>::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.flat_map.invoke_mut((x,))
+        if let Some(outer) = self.outer.as_mut() {
+            outer.next()
+        } else {
+            loop {
+                if let Some(inner) = self.inner.next() {
+                    let mut outer = self.f.invoke((inner,)).into_iter();
+                    let result = outer.next();
+                    if result.is_none() {
+                        continue;
+                    }
+                    self.outer = Some(outer);
+                    break result;
+                } else {
+                    self.outer = None;
+                    break None;
+                }
+            }
+        }
     }
 }
 
@@ -131,12 +169,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
+    fn map_iter_should_be_iterable() {
         let src = vec!["red", "green", "blue"];
         let iter = MapIter::new(src.iter(), RefArg(ToStringMapper));
 
-        for s in iter {
-            println!("color={s}");
-        }
+        assert_eq!(
+            src.iter().map(|s| String::from(*s)).collect::<Vec<_>>(),
+            iter.collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn flat_map_iter_should_be_iterable() {
+        let src = ["red", "green", "blue"];
+        let maplen = InvokeFn(str::len);
+        let len = maplen.invoke(("foobar",));
+        /*
+        let iter = FlatMapIter::new(src.iter(), maplen);
+
+        let expected = src.map(str::len);
+        assert_eq!(expected, iter.collect::<Vec<_>>());
+        */
     }
 }
