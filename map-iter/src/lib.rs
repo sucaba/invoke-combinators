@@ -134,20 +134,18 @@ where
                 return result;
             }
         }
-        loop {
-            if let Some(inner) = self.inner.next() {
-                let mut outer = self.f.invoke((inner,)).into_iter();
-                let result = outer.next();
-                if result.is_none() {
-                    continue;
-                }
-                self.outer = Some(outer);
-                break result;
-            } else {
-                self.outer = None;
-                break None;
+        while let Some(item) = self.inner.next() {
+            let mut outer = self.f.invoke((item,)).into_iter();
+            let result = outer.next();
+            if result.is_none() {
+                continue;
             }
+            self.outer = Some(outer);
+            return result;
         }
+
+        self.outer = None;
+        None
     }
 }
 
@@ -168,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn test() {
+    fn invokefn_should_be_invokable() {
         let maplen: InvokeFn<fn(&str) -> usize> = InvokeFn(str::len);
         let len = maplen.invoke(("foobar",));
         assert_eq!(6, len);
