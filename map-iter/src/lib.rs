@@ -183,7 +183,8 @@ mod tests {
     #[test]
     fn map_iter_should_be_iterable() {
         let src = vec!["red", "green", "blue"];
-        let iter = MapIter::new(src.iter(), RefArg(ToStringMapper));
+        let iter: MapIter<std::slice::Iter<&str>, RefArg<ToStringMapper>> =
+            MapIter::new(src.iter(), RefArg(ToStringMapper));
 
         assert_eq!(
             src.iter().map(|s| String::from(*s)).collect::<Vec<_>>(),
@@ -193,15 +194,18 @@ mod tests {
 
     #[test]
     fn test() {
-        let maplen = InvokeFn(str::len);
+        let maplen: InvokeFn<fn(&str) -> usize> = InvokeFn(str::len);
         let len = maplen.invoke(("foobar",));
         assert_eq!(6, len);
     }
 
     #[test]
     fn flat_map_iter_should_be_iterable() {
-        let src = ["red", "green", "blue"];
-        let iter = FlatMapIter::new(src.iter(), RefArg(InvokeFn(str::chars)));
+        let src: [&'static str; 3] = ["red", "green", "blue"];
+        let iter: FlatMapIter<
+            std::slice::Iter<&str>,
+            RefArg<InvokeFn<fn(&str) -> std::str::Chars>>,
+        > = FlatMapIter::new(src.iter(), RefArg(InvokeFn(str::chars)));
 
         let expected = String::from("redgreenblue");
         let v = iter.collect::<String>();
