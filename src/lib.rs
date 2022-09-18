@@ -34,12 +34,12 @@ mod tests {
         type Item = (&'a str, usize);
 
         type IntoIter = Map<
-            hash_map::Iter<'a, String, usize>,
-            InvokeFn<fn((&'a String, &'a usize)) -> (&'a str, usize)>,
+            <&'a HashMap<String, usize> as IntoIterator>::IntoIter,
+            fn((&'a String, &'a usize)) -> (&'a str, usize),
         >;
 
         fn into_iter(self) -> Self::IntoIter {
-            Map::new(self.inner.iter(), InvokeFn::new(|(s, c)| (s.as_str(), *c)))
+            Map::new(self.inner.iter(), |(s, c)| (s.as_str(), *c))
         }
     }
 
@@ -59,8 +59,8 @@ mod tests {
     #[test]
     fn map_iter_should_be_iterable() {
         let src = ["red", "green", "blue"];
-        let iter: Map<std::slice::Iter<&str>, RefArg<InvokeFn<fn(&'static str) -> String>>> =
-            Map::new(src.iter(), RefArg::new(InvokeFn::new(String::from)));
+        let iter: Map<std::slice::Iter<&str>, RefArg<fn(&'static str) -> String>> =
+            Map::new(src.iter(), RefArg::new(String::from));
 
         assert_eq!(
             src.into_iter().map(String::from).collect::<Vec<_>>(),
@@ -69,8 +69,8 @@ mod tests {
     }
 
     #[test]
-    fn invokefn_should_be_invokable() {
-        let maplen: InvokeFn<fn(&str) -> usize> = InvokeFn::new(str::len);
+    fn fn_should_be_invokable() {
+        let maplen: fn(&str) -> usize = str::len;
         let len = maplen.invoke(("foobar",));
         assert_eq!(6, len);
     }
@@ -78,8 +78,8 @@ mod tests {
     #[test]
     fn flat_map_iter_should_be_iterable() {
         let src: [&'static str; 3] = ["red", "green", "blue"];
-        let iter: FlatMap<std::slice::Iter<&str>, RefArg<InvokeFn<fn(&str) -> std::str::Chars>>> =
-            FlatMap::new(src.iter(), RefArg::new(InvokeFn::new(str::chars)));
+        let iter: FlatMap<std::slice::Iter<&str>, RefArg<fn(&str) -> std::str::Chars>> =
+            FlatMap::new(src.iter(), RefArg::new(str::chars));
 
         let expected = String::from("redgreenblue");
         let v = iter.collect::<String>();
