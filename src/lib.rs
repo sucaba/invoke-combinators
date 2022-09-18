@@ -9,7 +9,7 @@ pub use ref_arg::*;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{hash_map, HashMap};
+    use std::collections::HashMap;
 
     struct WordFrequency {
         inner: HashMap<String, usize>,
