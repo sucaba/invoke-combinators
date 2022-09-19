@@ -1,9 +1,9 @@
 mod invokes;
-mod iterators;
+mod iter;
 mod ref_arg;
 
 pub use invokes::*;
-pub use iterators::*;
+pub use iter::*;
 pub use ref_arg::*;
 
 #[cfg(test)]
@@ -33,13 +33,13 @@ mod tests {
     impl<'a> IntoIterator for &'a WordFrequency {
         type Item = (&'a str, usize);
 
-        type IntoIter = Map<
+        type IntoIter = MapInvoke<
             <&'a HashMap<String, usize> as IntoIterator>::IntoIter,
             fn((&'a String, &'a usize)) -> (&'a str, usize),
         >;
 
         fn into_iter(self) -> Self::IntoIter {
-            Map::new(self.inner.iter(), |(s, c)| (s.as_str(), *c))
+            self.inner.iter().map_invoke(|(s, c)| (s.as_str(), *c))
         }
     }
 
@@ -59,8 +59,8 @@ mod tests {
     #[test]
     fn map_iter_should_be_iterable() {
         let src = ["red", "green", "blue"];
-        let iter: Map<std::slice::Iter<&str>, RefArg<fn(&'static str) -> String>> =
-            Map::new(src.iter(), RefArg::new(String::from));
+        let iter: MapInvoke<std::slice::Iter<&str>, RefArg<fn(&'static str) -> String>> =
+            src.iter().map_invoke(RefArg::new(String::from));
 
         assert_eq!(
             src.into_iter().map(String::from).collect::<Vec<_>>(),
@@ -78,8 +78,8 @@ mod tests {
     #[test]
     fn flat_map_iter_should_be_iterable() {
         let src: [&'static str; 3] = ["red", "green", "blue"];
-        let iter: FlatMap<std::slice::Iter<&str>, RefArg<fn(&str) -> std::str::Chars>> =
-            FlatMap::new(src.iter(), RefArg::new(str::chars));
+        let iter: FlatMapInvoke<std::slice::Iter<&str>, RefArg<fn(&str) -> std::str::Chars>> =
+            src.iter().flat_map_invoke(RefArg::new(str::chars));
 
         let expected = String::from("redgreenblue");
         let v = iter.collect::<String>();

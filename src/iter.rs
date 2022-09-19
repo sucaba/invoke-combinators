@@ -1,46 +1,36 @@
 use crate::invokes::*;
 
-pub trait NoClosureExt: Sized {
-    fn no_closure(self) -> NoClosure<Self> {
-        NoClosure(self)
-    }
-}
-
-impl<I> NoClosureExt for I where I: Iterator {}
-
-pub struct NoClosure<I>(I);
-
-impl<I> NoClosure<I> {
-    pub fn map<F>(self, f: F) -> Map<I, F>
+pub trait IteratorInvokeExt: Iterator + Sized {
+    fn map_invoke<F>(self, f: F) -> MapInvoke<Self, F>
     where
-        I: Iterator,
-        F: InvokeMut<(I::Item,)>,
+        F: InvokeMut<(Self::Item,)>,
     {
-        Map::new(self.0, f)
+        MapInvoke::new(self, f)
     }
 
-    pub fn flat_map<F>(self, f: F) -> FlatMap<I, F>
+    fn flat_map_invoke<F>(self, f: F) -> FlatMapInvoke<Self, F>
     where
-        I: Iterator,
-        F: InvokeMut<(I::Item,)>,
+        F: InvokeMut<(Self::Item,)>,
         F::Output: IntoIterator,
     {
-        FlatMap::new(self.0, f)
+        FlatMapInvoke::new(self, f)
     }
 }
 
-pub struct Map<I, F> {
+impl<I> IteratorInvokeExt for I where I: Iterator {}
+
+pub struct MapInvoke<I, F> {
     inner: I,
     map: F,
 }
 
-impl<I, F> Map<I, F> {
+impl<I, F> MapInvoke<I, F> {
     pub fn new(inner: I, map: F) -> Self {
         Self { inner, map }
     }
 }
 
-impl<I, F, B> Iterator for Map<I, F>
+impl<I, F, B> Iterator for MapInvoke<I, F>
 where
     I: Iterator,
     F: InvokeMut<(I::Item,), Output = B>,
@@ -52,7 +42,7 @@ where
     }
 }
 
-pub struct FlatMap<I, F>
+pub struct FlatMapInvoke<I, F>
 where
     I: Iterator,
     F: InvokeMut<(I::Item,)>,
@@ -63,7 +53,7 @@ where
     f: F,
 }
 
-impl<I: Iterator, F> FlatMap<I, F>
+impl<I: Iterator, F> FlatMapInvoke<I, F>
 where
     I: Iterator,
     F::Output: IntoIterator,
@@ -78,7 +68,7 @@ where
     }
 }
 
-impl<I, F> Iterator for FlatMap<I, F>
+impl<I, F> Iterator for FlatMapInvoke<I, F>
 where
     I: Iterator,
     F::Output: IntoIterator,
